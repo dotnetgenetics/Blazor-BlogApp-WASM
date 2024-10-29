@@ -1,0 +1,55 @@
+﻿@rendermode InteractiveServer
+@inject IBlogRepository blogRepository
+@inject BlogStateService blogStateService
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Blazing Blog</a>
+    </div>
+</div>
+
+<div class="content-container px-3">
+    <ul class="nav flex-column">
+        @foreach (var post in blogPosts)
+        {
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="@($"/post/{post.Id}")">
+                    @post.Title
+                </NavLink>
+            </li>
+        }
+    </ul>
+    <button class="btn btn-primary" @onclick="AddNewPost">Add New Post</button>
+</div>
+
+@code {
+
+    private List<BlogPost> blogPosts = new();
+    private Action? _onStateChangedHandler;
+
+    protected override void OnInitialized()
+    {
+        _onStateChangedHandler = async () =>
+        {
+            blogPosts = await blogRepository.GetPosts();
+            await InvokeAsync(StateHasChanged);
+        };
+
+        blogStateService.OnChange += _onStateChangedHandler;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        blogPosts = await blogRepository.GetPosts();
+    }
+
+    private void AddNewPost()
+    {
+        blogRepository.AddPost("New post", "This is a new blog post").Wait();
+    }
+
+    private void Dispose()
+    {
+        blogStateService.OnChange -= _onStateChangedHandler;
+    }
+}

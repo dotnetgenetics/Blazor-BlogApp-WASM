@@ -1,0 +1,142 @@
+﻿@page "/edit-post/{PostId:int}"
+@using BlogAppWASM.Shared
+@using BlogAppWASM.Shared.Models
+@using System.Text.Json
+@inject IBlogRepository blogRepository
+@inject IJSRuntime JSRuntime
+
+@rendermode InteractiveAuto
+
+<head>
+    <link rel="stylesheet" href="/lib/font-awesome/css/fontawesome.css" />
+    <link rel="stylesheet" href="/lib/font-awesome/css/regular.min.css" />
+    <link rel="stylesheet" href="/lib/font-awesome/css/solid.min.css" />
+</head>
+
+<EditForm id="frmEditPost" Model="@this" OnValidSubmit="@UpdatePost" class="p-4">
+    <div class="mb-3">
+        <label for="title" class="form-label">Title</label>
+        <InputText id="title" class="form-control" @bind-Value="Title" />
+    </div>
+    <div class="mb-3">
+        <label for="content" class="form-label">Content</label>
+        <InputTextArea id="content" class="form-control" @bind-Value="Content" style="height: 200px;" />
+    </div>
+    <button type="submit" class="btn btn-primary">Update Post</button>
+    <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+</EditForm>
+
+<div class="editor-status">
+    @if (hasChanges)
+    {
+        <span class="text-warning">
+            <i class="fas fa-exclamation-triangle"></i>You have unsaved changes!
+        </span>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int PostId { get; set; }
+
+    [Inject]
+    public NavigationManager NavigationManager { get; set; } = default!;
+
+    private bool hasChanges = false;
+    private bool firstRender = false;
+
+    private string _title = string.Empty;
+    public string Title
+    {
+        get => _title;
+        set
+        {
+            if (_title != value)
+            {
+                _title = value;
+                HandleInputChange();
+            }
+        }
+    }
+
+    private string _content = string.Empty;
+    public string Content
+    {
+        get => _content;
+        set
+        {
+            if (_content != value)
+            {
+                _content = value;
+                HandleInputChange();
+            }
+        }
+    }
+
+    private async void HandleInputChange()
+    {
+        await JSRuntime.InvokeVoidAsync(
+            "localStorage.setItem",
+            $"post_{PostId}",
+            JsonSerializer.Serialize(new { Title, Content }));
+
+        hasChanges = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        //await LoadPostData();
+        await base.OnInitializedAsync();
+    }
+
+    /// <summary>
+    /// Fix for the component being rendered twice. Load data here.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadPostData();
+            StateHasChanged();
+            firstRender = false;
+        }
+    }
+
+    private async Task UpdatePost()
+    {
+        var post = new BlogPost() { Id = PostId, Title = Title, Content = Content };
+        await blogRepository.UpdatePost(post);
+        hasChanges = false;
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", $"post_{PostId}");
+    }
+
+    private async Task LoadPostData()
+    {
+        var postJson = await JSRuntime.InvokeAsync<string>("localStorage.getItem", $"post_{PostId}");
+        if (string.IsNullOrEmpty(postJson))
+        {
+            //if not found in local storage, fetch from the repository
+            var post = await blogRepository.GetPost(PostId);
+            if (post != null)
+            {
+                Title = post.Title;
+                Content = post.Content;
+                hasChanges = false;
+            }
+        }
+        else
+        {
+            var post = JsonSerializer.Deserialize<BlogPost>(postJson);
+            _title = post!.Title;
+            _content = post.Content;
+            hasChanges = true;
+        }
+    }
+
+    private async Task CancelEdit()
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", $"post_{PostId}");
+        hasChanges = false;
+        NavigationManager.NavigateTo($"/post/{PostId}");
+    }
+}

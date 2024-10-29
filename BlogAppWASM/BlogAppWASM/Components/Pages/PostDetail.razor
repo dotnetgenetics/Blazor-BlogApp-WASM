@@ -1,0 +1,36 @@
+﻿@page "/post/{PostId:int}"
+@inject IBlogRepository blogRepository
+@rendermode InteractiveServer
+
+@if (post is not null)
+{
+    <h2>@post.Title</h2>
+    <p>@post.Content</p>
+    <p>This post has id: @post.Id</p>
+    <p><button @onclick="EditPost">Edit Post</button></p>
+}
+else
+{
+    <p>Post not found.</p>
+}
+
+@code {
+
+    [Parameter]
+    public int PostId { get; set; }
+
+    [Inject]
+    public NavigationManager NavigationManager { get; set; } = default!;
+
+    private BlogPost? post;
+
+    protected override async Task OnInitializedAsync()
+    {
+        post = await blogRepository.GetPost(PostId);
+    }
+
+    void EditPost()
+    {
+        NavigationManager.NavigateTo($"/edit-post/{PostId}");
+    }
+}
